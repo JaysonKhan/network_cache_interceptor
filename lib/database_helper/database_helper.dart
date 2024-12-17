@@ -3,11 +3,11 @@ import 'dart:developer';
 
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:dio/dio.dart';
 
 /// Database helper class to handle caching
 class NetworkCacheSQLHelper {
-  static final NetworkCacheSQLHelper _instance = NetworkCacheSQLHelper._internal();
+  static final NetworkCacheSQLHelper _instance =
+      NetworkCacheSQLHelper._internal();
   static Database? _database;
 
   factory NetworkCacheSQLHelper() {
@@ -40,7 +40,8 @@ class NetworkCacheSQLHelper {
     ''');
   }
 
-  Future<void> insertResponse(String request, Map<String, dynamic> response) async {
+  Future<void> insertResponse(
+      String request, Map<String, dynamic> response) async {
     try {
       Database db = await database;
       final responseString = jsonEncode(response);
@@ -65,7 +66,9 @@ class NetworkCacheSQLHelper {
         where: 'request = ?',
         whereArgs: [request],
       );
-      return maps.isNotEmpty ? jsonDecode(maps.first['response'] as String) : {};
+      return maps.isNotEmpty
+          ? jsonDecode(maps.first['response'] as String)
+          : {};
     } catch (e) {
       log('Error fetching response: $e');
       return {};
@@ -77,4 +80,3 @@ class NetworkCacheSQLHelper {
     await db.execute('DELETE FROM responses');
   }
 }
-

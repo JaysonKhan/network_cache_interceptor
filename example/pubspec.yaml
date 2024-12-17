@@ -11,7 +11,8 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
-
+  network_cache_interceptor: ^1.0.0
+  dio: any
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -3,25 +3,27 @@ import 'package:dio/dio.dart';
 import 'package:network_cache_interceptor/network_cache_interceptor.dart';
 
 void main() {
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
   final Dio dio = Dio()..interceptors.add(NetworkCacheInterceptor());
+
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       home: Scaffold(
         appBar: AppBar(
-          title: Text('Network Cache Example'),
+          title: const Text('Network Cache Example'),
         ),
         body: Center(
           child: FutureBuilder(
             future: fetchData(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return CircularProgressIndicator();
+                return const CircularProgressIndicator();
               } else if (snapshot.hasError) {
                 return Text('Error: ${snapshot.error}');
               } else {

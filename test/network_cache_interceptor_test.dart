@@ -1,4 +1,3 @@
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dio/dio.dart';
 import 'package:network_cache_interceptor/network_cache_interceptor.dart';
@@ -13,8 +12,7 @@ void main() {
   setUp(() {
     mockDbHelper = MockDatabaseHelper();
     interceptor = NetworkCacheInterceptor();
-    dio = Dio()
-      ..interceptors.add(interceptor);
+    dio = Dio()..interceptors.add(interceptor);
   });
 
   group('NetworkCacheInterceptor Tests', () {
@@ -47,7 +45,7 @@ void main() {
         error: SocketException('No Internet'),
       );
 
-      await interceptor.onError(error, ErrorInterceptorHandler());
+      interceptor.onError(error, ErrorInterceptorHandler());
 
       final cachedData = await mockDbHelper.getResponse('/test');
       expect(cachedData['data'], equals({'message': 'Cached Data'}));
@@ -56,7 +54,10 @@ void main() {
     test('Should clear cache database', () async {
       await mockDbHelper.insertResponse(
         '/test',
-        {'data': {'message': 'Cached Data'}, 'timestamp': DateTime.now().toIso8601String()},
+        {
+          'data': {'message': 'Cached Data'},
+          'timestamp': DateTime.now().toIso8601String()
+        },
       );
 
       await interceptor.clearDatabase();
