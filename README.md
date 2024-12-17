@@ -1,39 +1,127 @@
-<!--
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
 
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/tools/pub/writing-package-pages).
+# Network Cache Interceptor
 
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/guides/libraries/create-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/to/develop-packages).
--->
+`Network Cache Interceptor` is a custom Dio interceptor designed for caching network requests. It returns cached data when offline and optimizes network request handling.
 
-TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
+---
 
-## Features
+## 📦 Installation
 
-TODO: List what your package can do. Maybe include images, gifs, or videos.
+Add the following line to your `pubspec.yaml`:
 
-## Getting started
-
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
-
-## Usage
-
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder.
-
-```dart
-const like = 'sample';
+```yaml
+dependencies:
+  network_cache_interceptor: ^1.0.0
 ```
 
-## Additional information
+Or install it using `flutter pub add`:
 
-TODO: Tell users more about the package: where to find more information, how to
-contribute to the package, how to file issues, what response they can expect
-from the package authors, and more.
+```bash
+flutter pub add network_cache_interceptor
+```
+
+---
+
+## 🚀 Usage
+
+### 1. Configure `Dio`
+
+```dart
+import 'package:dio/dio.dart';
+import 'package:network_cache_interceptor/network_cache_interceptor.dart';
+
+void main() {
+  final dio = Dio();
+
+  // Attach the interceptor
+  dio.interceptors.add(
+    NetworkCacheInterceptor(
+      noCacheStatusCodes: [401, 403],
+      cacheValidityMinutes: 30,
+      getCachedDataWhenError: true,
+    ),
+  );
+}
+```
+
+---
+
+### 2. Make a Request
+
+Add the `extra` parameter to enable caching:
+
+```dart
+final response = await dio.get(
+  'https://jsonplaceholder.typicode.com/posts',
+  options: Options(
+    extra: {
+      'cache': true,
+      'validate_time': 60, // Cache validity time (minutes)
+    },
+  ),
+);
+```
+
+---
+
+### 3. Clear Cached Data
+
+Clear all cached data from the database:
+
+```dart
+final cacheInterceptor = NetworkCacheInterceptor();
+await cacheInterceptor.clearDatabase();
+```
+
+---
+
+## ⚙️ Configuration
+
+| Parameter                | Description                          | Default Value |
+|-------------------------|--------------------------------------|----------------|
+| `noCacheStatusCodes`     | Status codes not to be cached      | `[401, 403]`   |
+| `cacheValidityMinutes`   | Cache validity time (minutes)      | `30`           |
+| `getCachedDataWhenError` | Fetch cached data when offline     | `true`         |
+
+---
+
+## 🔧 Technical Details
+
+- **Caching Logic:** If there's a network issue, previously cached responses are automatically returned if available.
+- **Error Logging:** All errors are logged using `log()`.
+- **Data Storage:** Data is saved locally using an SQL database.
+
+---
+
+## 🎯 Example
+
+```dart
+final dio = Dio();
+dio.interceptors.add(NetworkCacheInterceptor());
+
+try {
+  final response = await dio.get(
+    'https://jsonplaceholder.typicode.com/posts',
+    options: Options(extra: {'cache': true}),
+  );
+  print(response.data);
+} catch (e) {
+  print('Error: $e');
+}
+```
+
+---
+
+## 🛡️ License
+
+This project is licensed under the [MIT](./LICENSE) License.
+
+---
+
+## 💬 Additional Information
+
+For more information or to contribute, visit our GitHub page.
+
+---
+
+Stay updated on new releases and project announcements! 🎉

@@ -6,15 +6,15 @@ import 'package:sqflite/sqflite.dart';
 import 'package:dio/dio.dart';
 
 /// Database helper class to handle caching
-class DatabaseHelper {
-  static final DatabaseHelper _instance = DatabaseHelper._internal();
+class NetworkCacheSQLHelper {
+  static final NetworkCacheSQLHelper _instance = NetworkCacheSQLHelper._internal();
   static Database? _database;
 
-  factory DatabaseHelper() {
+  factory NetworkCacheSQLHelper() {
     return _instance;
   }
 
-  DatabaseHelper._internal();
+  NetworkCacheSQLHelper._internal();
 
   Future<Database> get database async {
     if (_database != null) return _database!;
