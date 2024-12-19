@@ -1,7 +1,7 @@
 
 # Changelog
 
-## [1.1.1] - Updated
+## [1.2.4] - Updated
 
 ### Changed
 - **Caching Logic Improvement:**
