@@ -5,8 +5,7 @@ import 'package:network_cache_interceptor/database_helper/database_helper.dart';
 
 /// Dio interceptor to handle network caching
 class NetworkCacheInterceptor extends Interceptor {
-  static final NetworkCacheInterceptor _instance =
-      NetworkCacheInterceptor._internal();
+  static final NetworkCacheInterceptor _instance = NetworkCacheInterceptor._internal();
   final NetworkCacheSQLHelper _dbHelper = NetworkCacheSQLHelper();
 
   List<int> _defaultNoCacheStatusCodes;
@@ -30,11 +29,9 @@ class NetworkCacheInterceptor extends Interceptor {
         _getCachedDataWhenError = true;
 
   @override
-  Future<void> onRequest(
-      RequestOptions options, RequestInterceptorHandler handler) async {
+  Future<void> onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
     final bool isCache = options.extra['cache'] ?? false;
-    final int cacheValidity =
-        options.extra['validate_time'] ?? _defaultCacheValidity;
+    final int cacheValidity = options.extra['validate_time'] ?? _defaultCacheValidity;
 
     if (!isCache) {
       handler.next(options);
@@ -42,22 +39,16 @@ class NetworkCacheInterceptor extends Interceptor {
     }
 
     try {
-      final cacheKey =
-          '${options.baseUrl}${options.path}?${options.queryParameters.toString()}';
+      final cacheKey = '${options.baseUrl}${options.path}?${options.queryParameters.toString()}';
       final cachedResponse = await _dbHelper.getResponse(cacheKey);
 
       if (cachedResponse.isNotEmpty) {
-        final cachedTimestamp =
-            DateTime.tryParse(cachedResponse['timestamp'] ?? '') ??
-                DateTime(1970);
-        final specifiedCacheDate = options.extra['cache_updated_date'] != null
-            ? DateTime.tryParse(options.extra['cache_updated_date'])
-            : null;
+        final cachedTimestamp = DateTime.tryParse(cachedResponse['timestamp'] ?? '') ?? DateTime(1970);
+        final specifiedCacheDate =
+            options.extra['cache_updated_date'] != null ? DateTime.tryParse(options.extra['cache_updated_date']) : null;
 
-        if (specifiedCacheDate != null &&
-                cachedTimestamp.isBefore(specifiedCacheDate) ||
-            DateTime.now().difference(cachedTimestamp).inMinutes <
-                cacheValidity) {
+        if (specifiedCacheDate != null && cachedTimestamp.isBefore(specifiedCacheDate) ||
+            DateTime.now().difference(cachedTimestamp).inMinutes < cacheValidity) {
           handler.resolve(
             Response(
               requestOptions: options,
@@ -76,11 +67,8 @@ class NetworkCacheInterceptor extends Interceptor {
   }
 
   @override
-  Future<void> onResponse(
-      Response response, ResponseInterceptorHandler handler) async {
-    final bool isCache = response.requestOptions.extra['cache'] ?? false;
-
-    if (isCache &&
+  Future<void> onResponse(Response response, ResponseInterceptorHandler handler) async {
+    if (response.requestOptions.method == 'GET' &&
         response.statusCode != null &&
         response.statusCode! >= 200 &&
         response.statusCode! <= 300 &&

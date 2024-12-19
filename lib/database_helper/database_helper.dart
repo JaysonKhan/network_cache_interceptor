@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
 
@@ -26,8 +27,9 @@ class NetworkCacheSQLHelper {
     String path = join(await getDatabasesPath(), 'network_cache.db');
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
@@ -35,7 +37,8 @@ class NetworkCacheSQLHelper {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS responses (
         request STRING PRIMARY KEY,
-        response TEXT
+        response TEXT,
+        timestamp STRING
       )
     ''');
   }
@@ -50,6 +53,7 @@ class NetworkCacheSQLHelper {
         {
           'request': request,
           'response': responseString,
+          'timestamp': DateTime.now().toIso8601String(),
         },
         conflictAlgorithm: ConflictAlgorithm.replace, // Replace on conflict
       );
@@ -78,5 +82,12 @@ class NetworkCacheSQLHelper {
   Future<void> clearDatabase() async {
     Database db = await database;
     await db.execute('DELETE FROM responses');
+  }
+
+  FutureOr<void> _onUpgrade(Database db, int oldVersion, int newVersion) {
+    if (oldVersion < 2) {
+      db.execute('DROP TABLE IF EXISTS responses');
+      _onCreate(db, newVersion);
+    }
   }
 }

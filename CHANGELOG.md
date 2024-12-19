@@ -1,15 +1,28 @@
 
 # Changelog
 
+## [1.1.1] - Updated
+
+### Changed
+- **Caching Logic Improvement:**
+  - All `GET` requests are now cached **by default**, even if `cache: false` is explicitly specified.
+  - Added more precise control through request `extra` parameters for cache behavior.
+
+### Fixed
+- Improved database synchronization to avoid data loss on unexpected crashes.
+- Enhanced caching mechanism to reduce duplicate entries.
+
+---
+
 ## [1.0.0] - Initial Release
 
 ### Added
 - Introduced `NetworkCacheInterceptor` for caching Dio network requests.
 - Added support for automatic caching and retrieval when offline.
 - Included custom cache configuration:
-    - `noCacheStatusCodes`: Prevents caching for specific status codes.
-    - `cacheValidityMinutes`: Controls cache expiration time.
-    - `getCachedDataWhenError`: Enables cache retrieval on network errors.
+  - `noCacheStatusCodes`: Prevents caching for specific status codes.
+  - `cacheValidityMinutes`: Controls cache expiration time.
+  - `getCachedDataWhenError`: Enables cache retrieval on network errors.
 - Implemented local SQL-based storage for cached responses.
 - Integrated error logging for easier debugging.
 
@@ -25,4 +38,3 @@
 - Add support for custom cache storage engines.
 - Include cache statistics and monitoring features.
 - Expand request matching capabilities (query parameters and headers).
-
