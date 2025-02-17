@@ -11,7 +11,7 @@ Add the following line to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  network_cache_interceptor: ^2.0.0
+  network_cache_interceptor: ^2.3.4
 ```
 
 Or install it using `flutter pub add`:
@@ -22,10 +22,10 @@ flutter pub add network_cache_interceptor
 
 ---
 
-## 🚀 What’s New in Version 2.0.0
+## 🚀 What’s New in Version 2.3.4
 
 - **Enhanced Caching Logic:**  
-  In version **2.0.0**, caching has been improved with the following updates:
+  In version **2.3.4**, caching has been improved with the following updates:
   - `GET` requests are now cached **by default**, even if `cache: false` is explicitly specified.
   - Introduced `uniqueWithHeader` parameter, allowing differentiation based on request headers.
   - Introduced `unique_key` parameter for more precise cache invalidation per request.
