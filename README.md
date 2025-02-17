@@ -28,6 +28,7 @@ flutter pub add network_cache_interceptor
   In version **1.3.4**, caching has been improved with the following updates:
   - `GET` requests are now cached **by default**, even if `cache: false` is explicitly specified.
   - Introduced `uniqueWithHeader` parameter, allowing differentiation based on request headers.
+  - Introduced `unique_key` parameter for more precise cache invalidation per request.
   - `Authorization` and `User-Agent` headers are now ignored when generating cache keys to prevent unnecessary cache invalidation.
   - Improved `unique_key` handling for better cache management.
 
@@ -87,7 +88,28 @@ final response = await dio.get(
 
 ---
 
-### 3. Clear Cached Data
+### 3. Using `unique_key` for More Precise Cache Invalidation
+
+The `unique_key` parameter allows more precise control over cache storage and retrieval.  
+It is useful when the same request may return different results based on dynamic parameters.
+
+```dart
+final response = await dio.get(
+  'https://jsonplaceholder.typicode.com/posts',
+  options: Options(
+    extra: {
+      'cache': true, 
+      'unique_key': 'user_123', // Ensures this request gets a unique cache key
+    },
+  ),
+);
+```
+
+This ensures that responses are cached separately for different `unique_key` values.
+
+---
+
+### 4. Clear Cached Data
 
 Clear all cached data from the database:
 
@@ -106,6 +128,7 @@ await cacheInterceptor.clearDatabase();
 | `cacheValidityMinutes`   | Cache validity duration (in minutes)          | `30`           |
 | `getCachedDataWhenError` | Fetch cached data when offline                | `true`         |
 | `uniqueWithHeader`       | Differentiates cache keys based on headers    | `false`        |
+| `unique_key`             | Custom key to uniquely store/retrieve cache   | `''` (optional) |
 
 ---
 
@@ -113,6 +136,7 @@ await cacheInterceptor.clearDatabase();
 
 - **Caching Logic:** If there's a network issue, previously cached responses are automatically returned if available.
 - **Header Filtering:** `Authorization` and `User-Agent` headers are ignored when generating cache keys.
+- **`unique_key` Support:** Allows more granular cache control by separating responses.
 - **Improved Error Handling:** Better handling of network failures with enhanced logging.
 - **Data Storage:** Cached data is stored locally using an SQL database.
 
@@ -125,13 +149,13 @@ final dio = Dio();
 dio.interceptors.add(NetworkCacheInterceptor());
 
 try {
-  final response = await dio.get(
-    'https://jsonplaceholder.typicode.com/posts',
-    options: Options(extra: {'cache': true}),
-  );
-  print(response.data);
+final response = await dio.get(
+'https://jsonplaceholder.typicode.com/posts',
+options: Options(extra: {'cache': true, 'unique_key': 'session_abc'}),
+);
+print(response.data);
 } catch (e) {
-  print('Error: $e');
+print('Error: $e');
 }
 ```
 
