@@ -37,11 +37,11 @@ class MyApp extends StatelessWidget {
               }
               // Show an error message if fetching fails
               else if (snapshot.hasError) {
-                return Text('Error: \${snapshot.error}');
+                return const Text('Error: \${snapshot.error}');
               }
               // Display fetched data
               else {
-                return Text('Data: \${snapshot.data}');
+                return const Text('Data: \${snapshot.data}');
               }
             },
           ),

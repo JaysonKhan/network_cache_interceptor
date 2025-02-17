@@ -50,11 +50,11 @@ void main() {
       final error = DioException(
         requestOptions: options,
         type: DioExceptionType.connectionTimeout,
-        error: SocketException('No Internet'),
+        error: const SocketException('No Internet'),
       );
 
       // Simulate error handling
-      await interceptor.onError(error, ErrorInterceptorHandler());
+      interceptor.onError(error, ErrorInterceptorHandler());
 
       // Check if cached data is returned instead of throwing an error
       final cachedData = await mockDbHelper.getResponse('/test');
