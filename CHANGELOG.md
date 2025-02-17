@@ -1,6 +1,22 @@
 
 # Changelog
 
+## [1.3.4] - Updated
+
+### Changed
+- **Caching Logic Improvement:**
+  - `GET` requests are now cached **by default**, even if `cache: false` is explicitly specified.
+  - Introduced `uniqueWithHeader` parameter to allow caching differentiation based on request headers.
+  - Added better handling of `unique_key` for more precise cache invalidation.
+  - `Authorization` and `User-Agent` headers are now ignored when generating cache keys to prevent unnecessary cache invalidation.
+
+### Fixed
+- Improved database synchronization to avoid data loss on unexpected crashes.
+- Enhanced caching mechanism to reduce duplicate entries.
+- Optimized cache key generation to ensure consistency and prevent mismatches.
+
+---
+
 ## [1.2.4] - Updated
 
 ### Changed

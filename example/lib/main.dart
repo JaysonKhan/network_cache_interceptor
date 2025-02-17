@@ -7,7 +7,16 @@ void main() {
 }
 
 class MyApp extends StatelessWidget {
-  final Dio dio = Dio()..interceptors.add(NetworkCacheInterceptor());
+  // Creating a Dio instance and attaching the NetworkCacheInterceptor
+  final Dio dio = Dio()
+    ..interceptors.add(
+      NetworkCacheInterceptor(
+        noCacheStatusCodes: [401, 403, 304],
+        cacheValidityMinutes: 30,
+        getCachedDataWhenError: true,
+        uniqueWithHeader: true,
+      ),
+    );
 
   const MyApp({super.key});
 
@@ -22,12 +31,17 @@ class MyApp extends StatelessWidget {
           child: FutureBuilder(
             future: fetchData(),
             builder: (context, snapshot) {
+              // Show a loading indicator while fetching data
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const CircularProgressIndicator();
-              } else if (snapshot.hasError) {
-                return Text('Error: ${snapshot.error}');
-              } else {
-                return Text('Data: ${snapshot.data}');
+              }
+              // Show an error message if fetching fails
+              else if (snapshot.hasError) {
+                return Text('Error: \${snapshot.error}');
+              }
+              // Display fetched data
+              else {
+                return Text('Data: \${snapshot.data}');
               }
             },
           ),
@@ -36,14 +50,15 @@ class MyApp extends StatelessWidget {
     );
   }
 
+  /// Fetches data from the API with caching enabled
   Future<String> fetchData() async {
     try {
       final response = await dio.get(
         'https://jsonplaceholder.typicode.com/posts/1',
         options: Options(
           extra: {
-            'cache': true,
-            'validate_time': 60, // Cache validity in minutes
+            'cache': true, // Enable caching
+            'validate_time': 60, // Cache validity duration (in minutes)
           },
         ),
       );

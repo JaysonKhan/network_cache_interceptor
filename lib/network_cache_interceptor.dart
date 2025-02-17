@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'dart:developer';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:network_cache_interceptor/database_helper/database_helper.dart';
 
-/// Dio interceptor to handle network caching
+/// A Dio interceptor for caching network requests.
+/// This interceptor enables caching of responses to optimize network calls.
 class NetworkCacheInterceptor extends Interceptor {
   static final NetworkCacheInterceptor _instance =
       NetworkCacheInterceptor._internal();
@@ -12,29 +14,45 @@ class NetworkCacheInterceptor extends Interceptor {
   List<int> _defaultNoCacheStatusCodes;
   int _defaultCacheValidity;
   bool _getCachedDataWhenError;
+  bool _uniqueWithHeader;
 
+  /// Creates a new instance of [NetworkCacheInterceptor] with customizable options.
+  ///
+  /// - `noCacheStatusCodes`: List of status codes that should not be cached.
+  /// - `cacheValidityMinutes`: Defines cache expiration duration in minutes.
+  /// - `getCachedDataWhenError`: If true, cached data is returned on network failure.
+  /// - `uniqueWithHeader`: Differentiates cache keys based on request headers.
   factory NetworkCacheInterceptor({
-    List<int> noCacheStatusCodes = const [401, 403],
+    List<int> noCacheStatusCodes = const [401, 403, 304],
     int cacheValidityMinutes = 30,
     bool getCachedDataWhenError = true,
+    bool uniqueWithHeader = false,
   }) {
     _instance._defaultNoCacheStatusCodes = noCacheStatusCodes;
     _instance._defaultCacheValidity = cacheValidityMinutes;
     _instance._getCachedDataWhenError = getCachedDataWhenError;
+    _instance._uniqueWithHeader = uniqueWithHeader;
     return _instance;
   }
 
   NetworkCacheInterceptor._internal()
-      : _defaultNoCacheStatusCodes = [401, 403],
+      : _defaultNoCacheStatusCodes = [401, 403, 304],
         _defaultCacheValidity = 30,
-        _getCachedDataWhenError = true;
+        _getCachedDataWhenError = true,
+        _uniqueWithHeader = false;
 
+  /// Intercepts outgoing requests and checks for cached responses.
+  /// If caching is enabled and valid data exists, the cached response is returned.
   @override
   Future<void> onRequest(
       RequestOptions options, RequestInterceptorHandler handler) async {
     final bool isCache = options.extra['cache'] ?? false;
+    final String uniqueKey = options.extra['unique_key'] ?? '';
     final int cacheValidity =
         options.extra['validate_time'] ?? _defaultCacheValidity;
+    Map<String, dynamic> filteredHeaders = Map.from(options.headers);
+    filteredHeaders.remove('Authorization'); // Ignore access tokens
+    filteredHeaders.remove('User-Agent'); // Ignore user agents
 
     if (!isCache) {
       handler.next(options);
@@ -42,8 +60,15 @@ class NetworkCacheInterceptor extends Interceptor {
     }
 
     try {
-      final cacheKey =
-          '${options.baseUrl}${options.path}?${options.queryParameters.toString()}';
+      String cacheKey =
+          '${options.baseUrl}${options.path}?${jsonEncode(options.queryParameters)}';
+
+      if (uniqueKey.isNotEmpty) {
+        cacheKey += uniqueKey;
+      }
+      if (_uniqueWithHeader) {
+        cacheKey += jsonEncode(filteredHeaders);
+      }
       final cachedResponse = await _dbHelper.getResponse(cacheKey);
 
       if (cachedResponse.isNotEmpty) {
@@ -68,13 +93,15 @@ class NetworkCacheInterceptor extends Interceptor {
           return;
         }
       }
-    } catch (e) {
-      log('Error during cache check: $e');
+    } catch (e, stackTrace) {
+      log('Error fetching from cache: $e', stackTrace: stackTrace);
     }
 
     handler.next(options);
   }
 
+  /// Handles successful responses and caches them for future requests.
+  /// Only `GET` responses with valid status codes are cached.
   @override
   Future<void> onResponse(
       Response response, ResponseInterceptorHandler handler) async {
@@ -84,8 +111,21 @@ class NetworkCacheInterceptor extends Interceptor {
         response.statusCode! <= 300 &&
         response.data != null &&
         !_defaultNoCacheStatusCodes.contains(response.statusCode)) {
-      final cacheKey =
-          '${response.requestOptions.baseUrl}${response.requestOptions.path}?${response.requestOptions.queryParameters.toString()}';
+      final String uniqueKey =
+          response.requestOptions.extra['unique_key'] ?? '';
+      Map<String, dynamic> filteredHeaders =
+          Map.from(response.requestOptions.headers);
+      filteredHeaders.remove('Authorization'); // Ignore access tokens
+      filteredHeaders.remove('User-Agent'); // Ignore user agents
+      String cacheKey =
+          '${response.requestOptions.baseUrl}${response.requestOptions.path}?${jsonEncode(response.requestOptions.queryParameters)}';
+
+      if (uniqueKey.isNotEmpty) {
+        cacheKey += uniqueKey;
+      }
+      if (_uniqueWithHeader) {
+        cacheKey += jsonEncode(filteredHeaders);
+      }
       final responseToCache = {
         'data': response.data,
         'timestamp': DateTime.now().toIso8601String(),
@@ -101,6 +141,7 @@ class NetworkCacheInterceptor extends Interceptor {
     handler.next(response);
   }
 
+  /// Handles request errors and attempts to return cached data if enabled.
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) async {
     log('Dio Error: ${err.message}');
@@ -112,9 +153,22 @@ class NetworkCacheInterceptor extends Interceptor {
     if (err.type == DioExceptionType.connectionTimeout ||
         err.type == DioExceptionType.receiveTimeout ||
         err.type == DioExceptionType.sendTimeout ||
-        err.type == DioExceptionType.unknown && err.error is SocketException) {
-      final cacheKey =
-          '${err.requestOptions.baseUrl}${err.requestOptions.path}?${err.requestOptions.queryParameters.toString()}';
+        (err.type == DioExceptionType.unknown &&
+            err.error is SocketException)) {
+      final uniqueKey = err.requestOptions.extra['unique_key'] ?? '';
+      Map<String, dynamic> filteredHeaders =
+          Map.from(err.requestOptions.headers);
+      filteredHeaders.remove('Authorization'); // Ignore access tokens
+      filteredHeaders.remove('User-Agent'); // Ignore user agents
+      String cacheKey =
+          '${err.requestOptions.baseUrl}${err.requestOptions.path}?${jsonEncode(err.requestOptions.queryParameters)}';
+
+      if (uniqueKey.isNotEmpty) {
+        cacheKey += uniqueKey;
+      }
+      if (_uniqueWithHeader) {
+        cacheKey += jsonEncode(filteredHeaders);
+      }
       try {
         final cachedResponse = await _dbHelper.getResponse(cacheKey);
         if (cachedResponse.isNotEmpty) {
@@ -127,14 +181,15 @@ class NetworkCacheInterceptor extends Interceptor {
           );
           return;
         }
-      } catch (e) {
-        log('Error fetching from cache: $e');
+      } catch (e, stackTrace) {
+        log('Error fetching from cache: $e', stackTrace: stackTrace);
       }
     }
 
     handler.next(err);
   }
 
+  /// Clears all cached responses from the local database.
   Future<void> clearDatabase() async {
     try {
       await _dbHelper.clearDatabase();

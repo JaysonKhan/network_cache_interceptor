@@ -11,7 +11,7 @@ Add the following line to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  network_cache_interceptor: ^1.2.4
+  network_cache_interceptor: ^1.3.4
 ```
 
 Or install it using `flutter pub add`:
@@ -22,10 +22,14 @@ flutter pub add network_cache_interceptor
 
 ---
 
-## 🚀 What’s New in Version 1.2.4
+## 🚀 What’s New in Version 1.3.4
 
-- **Updated Caching Logic:**  
-  In version **1.2.4**, the caching logic has been enhanced. **All GET requests are now cached by default**, even if `cache: false` is explicitly specified. This ensures consistent caching while maintaining manual control through additional options.
+- **Enhanced Caching Logic:**  
+  In version **1.3.4**, caching has been improved with the following updates:
+  - `GET` requests are now cached **by default**, even if `cache: false` is explicitly specified.
+  - Introduced `uniqueWithHeader` parameter, allowing differentiation based on request headers.
+  - `Authorization` and `User-Agent` headers are now ignored when generating cache keys to prevent unnecessary cache invalidation.
+  - Improved `unique_key` handling for better cache management.
 
 ---
 
@@ -43,9 +47,10 @@ void main() {
   // Attach the interceptor
   dio.interceptors.add(
     NetworkCacheInterceptor(
-      noCacheStatusCodes: [401, 403],
+      noCacheStatusCodes: [401, 403, 304],
       cacheValidityMinutes: 30,
       getCachedDataWhenError: true,
+      uniqueWithHeader: true,
     ),
   );
 }
@@ -95,19 +100,21 @@ await cacheInterceptor.clearDatabase();
 
 ## ⚙️ Configuration
 
-| Parameter                | Description                          | Default Value |
-|-------------------------|--------------------------------------|----------------|
-| `noCacheStatusCodes`     | Status codes not to be cached      | `[401, 403]`   |
-| `cacheValidityMinutes`   | Cache validity time (minutes)      | `30`           |
-| `getCachedDataWhenError` | Fetch cached data when offline     | `true`         |
+| Parameter                | Description                                    | Default Value |
+|-------------------------|------------------------------------------------|---------------|
+| `noCacheStatusCodes`     | Status codes that should not be cached        | `[401, 403, 304]` |
+| `cacheValidityMinutes`   | Cache validity duration (in minutes)          | `30`           |
+| `getCachedDataWhenError` | Fetch cached data when offline                | `true`         |
+| `uniqueWithHeader`       | Differentiates cache keys based on headers    | `false`        |
 
 ---
 
 ## 🔧 Technical Details
 
 - **Caching Logic:** If there's a network issue, previously cached responses are automatically returned if available.
-- **Error Logging:** All errors are logged using `log()`.
-- **Data Storage:** Data is saved locally using an SQL database.
+- **Header Filtering:** `Authorization` and `User-Agent` headers are ignored when generating cache keys.
+- **Improved Error Handling:** Better handling of network failures with enhanced logging.
+- **Data Storage:** Cached data is stored locally using an SQL database.
 
 ---
 
@@ -143,7 +150,6 @@ For more information or to contribute, visit our GitHub page.
 ---
 
 Stay updated on new releases and project announcements! 🎉
-
 
 ---
 

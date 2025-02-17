@@ -1,3 +1,4 @@
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dio/dio.dart';
 import 'package:network_cache_interceptor/network_cache_interceptor.dart';
@@ -10,27 +11,34 @@ void main() {
   late MockDatabaseHelper mockDbHelper;
 
   setUp(() {
+    // Initialize the mock database and cache interceptor
     mockDbHelper = MockDatabaseHelper();
-    interceptor = NetworkCacheInterceptor();
+    interceptor = NetworkCacheInterceptor(getCachedDataWhenError: true);
     dio = Dio()..interceptors.add(interceptor);
   });
 
   group('NetworkCacheInterceptor Tests', () {
     test('Should cache response when caching is enabled', () async {
-      final options = Options(extra: {'cache': true});
+      final options = RequestOptions(path: '/test', extra: {'cache': true});
       final response = Response(
-        requestOptions: RequestOptions(path: '/test'),
+        requestOptions: options,
         statusCode: 200,
         data: {'message': 'Success'},
       );
 
+      // Simulate response handling
       await interceptor.onResponse(response, ResponseInterceptorHandler());
 
-      expect(await mockDbHelper.getResponse('/test'), isNotEmpty);
+      // Verify that data is stored in the cache
+      final cachedData = await mockDbHelper.getResponse('/test');
+      expect(cachedData, isNotEmpty);
+      expect(cachedData['data'], equals({'message': 'Success'}));
     });
 
     test('Should return cached data on network error', () async {
       final options = RequestOptions(path: '/test', extra: {'cache': true});
+
+      // Insert mock data into cache
       await mockDbHelper.insertResponse(
         '/test',
         {
@@ -45,13 +53,16 @@ void main() {
         error: SocketException('No Internet'),
       );
 
-      interceptor.onError(error, ErrorInterceptorHandler());
+      // Simulate error handling
+      await interceptor.onError(error, ErrorInterceptorHandler());
 
+      // Check if cached data is returned instead of throwing an error
       final cachedData = await mockDbHelper.getResponse('/test');
       expect(cachedData['data'], equals({'message': 'Cached Data'}));
     });
 
     test('Should clear cache database', () async {
+      // Insert sample cached data
       await mockDbHelper.insertResponse(
         '/test',
         {
@@ -60,13 +71,31 @@ void main() {
         },
       );
 
+      // Clear database
       await interceptor.clearDatabase();
+
+      // Ensure the cache is empty
       final cachedData = await mockDbHelper.getResponse('/test');
       expect(cachedData, isEmpty);
+    });
+
+    test('Should not cache responses with excluded status codes', () async {
+      final options = RequestOptions(path: '/test', extra: {'cache': true});
+      final response = Response(
+        requestOptions: options,
+        statusCode: 401, // Excluded from caching
+        data: {'message': 'Unauthorized'},
+      );
+
+      await interceptor.onResponse(response, ResponseInterceptorHandler());
+
+      final cachedData = await mockDbHelper.getResponse('/test');
+      expect(cachedData, isEmpty); // Should not be cached
     });
   });
 }
 
+/// Mock Database Helper for simulating cache storage
 class MockDatabaseHelper extends NetworkCacheSQLHelper {
   final Map<String, Map<String, dynamic>> _storage = {};
 
