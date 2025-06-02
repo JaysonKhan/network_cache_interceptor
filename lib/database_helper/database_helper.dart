@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
 
+import 'package:flutter/cupertino.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
@@ -16,6 +17,8 @@ class NetworkCacheSQLHelper {
   }
 
   NetworkCacheSQLHelper._internal();
+  @visibleForTesting
+  NetworkCacheSQLHelper.testing();
 
   Future<Database> get database async {
     if (_database != null) return _database!;

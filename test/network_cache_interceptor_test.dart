@@ -96,9 +96,9 @@ void main() {
 }
 
 /// Mock Database Helper for simulating cache storage
-class MockDatabaseHelper extends NetworkCacheSQLHelper {
+final class MockDatabaseHelper extends NetworkCacheSQLHelper {
   final Map<String, Map<String, dynamic>> _storage = {};
-
+  MockDatabaseHelper() : super.testing();
   @override
   Future<void> insertResponse(String key, Map<String, dynamic> value) async {
     _storage[key] = value;
