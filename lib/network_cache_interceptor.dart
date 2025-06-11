@@ -12,6 +12,7 @@ class NetworkCacheInterceptor extends Interceptor {
   final NetworkCacheSQLHelper _dbHelper = NetworkCacheSQLHelper();
 
   List<int> _defaultNoCacheStatusCodes;
+  Set<String> _defaultNoCacheHttpMethods;
   int _defaultCacheValidity;
   bool _getCachedDataWhenError;
   bool _uniqueWithHeader;
@@ -22,8 +23,12 @@ class NetworkCacheInterceptor extends Interceptor {
   /// - `cacheValidityMinutes`: Defines cache expiration duration in minutes.
   /// - `getCachedDataWhenError`: If true, cached data is returned on network failure.
   /// - `uniqueWithHeader`: Differentiates cache keys based on request headers.
+  /// - `noCacheHttpMethods`: List of http methods (e.g. `POST`, `PUT`, `GET`, etc.)
+  ///                         which should be not be cached. Those values will be converted
+  ///                         to lowerCase values, e.G. `POST` will become `post`.
   factory NetworkCacheInterceptor({
     List<int> noCacheStatusCodes = const [401, 403, 304],
+    List<String> noCacheHttpMethods = const ['POST'],
     int cacheValidityMinutes = 30,
     bool getCachedDataWhenError = true,
     bool uniqueWithHeader = false,
@@ -32,11 +37,14 @@ class NetworkCacheInterceptor extends Interceptor {
     _instance._defaultCacheValidity = cacheValidityMinutes;
     _instance._getCachedDataWhenError = getCachedDataWhenError;
     _instance._uniqueWithHeader = uniqueWithHeader;
+    _instance._defaultNoCacheHttpMethods =
+        noCacheHttpMethods.map((e) => e.toLowerCase()).toSet();
     return _instance;
   }
 
   NetworkCacheInterceptor._internal()
-      : _defaultNoCacheStatusCodes = [401, 403, 304],
+      : _defaultNoCacheStatusCodes = const [401, 403, 304],
+        _defaultNoCacheHttpMethods = const {'post'},
         _defaultCacheValidity = 30,
         _getCachedDataWhenError = true,
         _uniqueWithHeader = false;
@@ -48,6 +56,8 @@ class NetworkCacheInterceptor extends Interceptor {
       RequestOptions options, RequestInterceptorHandler handler) async {
     final bool isCache = options.extra['cache'] ?? false;
     final String uniqueKey = options.extra['unique_key'] ?? '';
+    final bool isIgnoredHttpMethod =
+        _defaultNoCacheHttpMethods.contains(options.method.toLowerCase());
     final int cacheValidity =
         options.extra['validate_time'] ?? _defaultCacheValidity;
     Map<String, dynamic> filteredHeaders = Map.from(options.headers);
@@ -55,6 +65,11 @@ class NetworkCacheInterceptor extends Interceptor {
     filteredHeaders.remove('User-Agent'); // Ignore user agents
 
     if (!isCache) {
+      handler.next(options);
+      return;
+    }
+
+    if (isIgnoredHttpMethod) {
       handler.next(options);
       return;
     }
@@ -105,12 +120,13 @@ class NetworkCacheInterceptor extends Interceptor {
   @override
   Future<void> onResponse(
       Response response, ResponseInterceptorHandler handler) async {
-    if (response.requestOptions.method == 'GET' &&
-        response.statusCode != null &&
+    if (response.statusCode != null &&
         response.statusCode! >= 200 &&
         response.statusCode! <= 300 &&
         response.data != null &&
-        !_defaultNoCacheStatusCodes.contains(response.statusCode)) {
+        !_defaultNoCacheStatusCodes.contains(response.statusCode) &&
+        !_defaultNoCacheHttpMethods
+            .contains(response.requestOptions.method.toLowerCase())) {
       final String uniqueKey =
           response.requestOptions.extra['unique_key'] ?? '';
       Map<String, dynamic> filteredHeaders =
