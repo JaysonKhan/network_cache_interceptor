@@ -1,6 +1,21 @@
 
 # Changelog
 
+## [2.3.5] - Updated
+
+### Added
+- **No-Cache HTTP Methods Option:**
+  - Developers can now specify HTTP methods (e.g., `POST`, `PUT`) that should **not** be cached, giving finer control over caching logic.
+
+### Changed
+- **Enhanced Offline Mode:**
+  - Now leverages `DioExceptionType.connectionError` to detect offline scenarios and return cached data reliably.
+
+### Fixed
+- Improved handling of `unique_key` and request headers in cache key generation for consistent and reliable caching.
+
+---
+
 ## [2.3.4] - Updated
 
 ### Changed
