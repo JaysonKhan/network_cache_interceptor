@@ -153,6 +153,7 @@ class NetworkCacheInterceptor extends Interceptor {
     if (err.type == DioExceptionType.connectionTimeout ||
         err.type == DioExceptionType.receiveTimeout ||
         err.type == DioExceptionType.sendTimeout ||
+        err.type == DioExceptionType.connectionError ||
         (err.type == DioExceptionType.unknown &&
             err.error is SocketException)) {
       final uniqueKey = err.requestOptions.extra['unique_key'] ?? '';
