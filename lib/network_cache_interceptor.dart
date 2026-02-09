@@ -1,14 +1,14 @@
 import 'dart:convert';
 import 'dart:developer';
 import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:network_cache_interceptor/database_helper/database_helper.dart';
 
 /// A Dio interceptor for caching network requests.
 /// This interceptor enables caching of responses to optimize network calls.
 class NetworkCacheInterceptor extends Interceptor {
-  static final NetworkCacheInterceptor _instance =
-      NetworkCacheInterceptor._internal();
+  static final NetworkCacheInterceptor _instance = NetworkCacheInterceptor._internal();
   final NetworkCacheSQLHelper _dbHelper = NetworkCacheSQLHelper();
 
   List<int> _defaultNoCacheStatusCodes;
@@ -37,8 +37,7 @@ class NetworkCacheInterceptor extends Interceptor {
     _instance._defaultCacheValidity = cacheValidityMinutes;
     _instance._getCachedDataWhenError = getCachedDataWhenError;
     _instance._uniqueWithHeader = uniqueWithHeader;
-    _instance._defaultNoCacheHttpMethods =
-        noCacheHttpMethods.map((e) => e.toLowerCase()).toSet();
+    _instance._defaultNoCacheHttpMethods = noCacheHttpMethods.map((e) => e.toLowerCase()).toSet();
     return _instance;
   }
 
@@ -52,14 +51,11 @@ class NetworkCacheInterceptor extends Interceptor {
   /// Intercepts outgoing requests and checks for cached responses.
   /// If caching is enabled and valid data exists, the cached response is returned.
   @override
-  Future<void> onRequest(
-      RequestOptions options, RequestInterceptorHandler handler) async {
+  Future<void> onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
     final bool isCache = options.extra['cache'] ?? false;
     final String uniqueKey = options.extra['unique_key'] ?? '';
-    final bool isIgnoredHttpMethod =
-        _defaultNoCacheHttpMethods.contains(options.method.toLowerCase());
-    final int cacheValidity =
-        options.extra['validate_time'] ?? _defaultCacheValidity;
+    final bool isIgnoredHttpMethod = _defaultNoCacheHttpMethods.contains(options.method.toLowerCase());
+    final int cacheValidity = options.extra['validate_time'] ?? _defaultCacheValidity;
     Map<String, dynamic> filteredHeaders = Map.from(options.headers);
     filteredHeaders.remove('Authorization'); // Ignore access tokens
     filteredHeaders.remove('User-Agent'); // Ignore user agents
@@ -75,8 +71,7 @@ class NetworkCacheInterceptor extends Interceptor {
     }
 
     try {
-      String cacheKey =
-          '${options.baseUrl}${options.path}?${jsonEncode(options.queryParameters)}';
+      String cacheKey = '${options.baseUrl}${options.path}?${jsonEncode(options.queryParameters)}';
 
       if (uniqueKey.isNotEmpty) {
         cacheKey += uniqueKey;
@@ -87,17 +82,12 @@ class NetworkCacheInterceptor extends Interceptor {
       final cachedResponse = await _dbHelper.getResponse(cacheKey);
 
       if (cachedResponse.isNotEmpty) {
-        final cachedTimestamp =
-            DateTime.tryParse(cachedResponse['timestamp'] ?? '') ??
-                DateTime(1970);
-        final specifiedCacheDate = options.extra['cache_updated_date'] != null
-            ? DateTime.tryParse(options.extra['cache_updated_date'])
-            : null;
+        final cachedTimestamp = DateTime.tryParse(cachedResponse['timestamp'] ?? '') ?? DateTime(1970);
+        final specifiedCacheDate =
+            options.extra['cache_updated_date'] != null ? DateTime.tryParse(options.extra['cache_updated_date']) : null;
 
-        if (specifiedCacheDate != null &&
-                cachedTimestamp.isBefore(specifiedCacheDate) ||
-            DateTime.now().difference(cachedTimestamp).inMinutes <
-                cacheValidity) {
+        if (specifiedCacheDate != null && cachedTimestamp.isBefore(specifiedCacheDate) ||
+            DateTime.now().difference(cachedTimestamp).inMinutes < cacheValidity) {
           handler.resolve(
             Response(
               requestOptions: options,
@@ -118,19 +108,16 @@ class NetworkCacheInterceptor extends Interceptor {
   /// Handles successful responses and caches them for future requests.
   /// Only `GET` responses with valid status codes are cached.
   @override
-  Future<void> onResponse(
-      Response response, ResponseInterceptorHandler handler) async {
+  Future<void> onResponse(Response response, ResponseInterceptorHandler handler) async {
     if (response.statusCode != null &&
         response.statusCode! >= 200 &&
         response.statusCode! <= 300 &&
         response.data != null &&
+        response.data['success'] == true &&
         !_defaultNoCacheStatusCodes.contains(response.statusCode) &&
-        !_defaultNoCacheHttpMethods
-            .contains(response.requestOptions.method.toLowerCase())) {
-      final String uniqueKey =
-          response.requestOptions.extra['unique_key'] ?? '';
-      Map<String, dynamic> filteredHeaders =
-          Map.from(response.requestOptions.headers);
+        !_defaultNoCacheHttpMethods.contains(response.requestOptions.method.toLowerCase())) {
+      final String uniqueKey = response.requestOptions.extra['unique_key'] ?? '';
+      Map<String, dynamic> filteredHeaders = Map.from(response.requestOptions.headers);
       filteredHeaders.remove('Authorization'); // Ignore access tokens
       filteredHeaders.remove('User-Agent'); // Ignore user agents
       String cacheKey =
@@ -170,11 +157,9 @@ class NetworkCacheInterceptor extends Interceptor {
         err.type == DioExceptionType.receiveTimeout ||
         err.type == DioExceptionType.sendTimeout ||
         err.type == DioExceptionType.connectionError ||
-        (err.type == DioExceptionType.unknown &&
-            err.error is SocketException)) {
+        (err.type == DioExceptionType.unknown && err.error is SocketException)) {
       final uniqueKey = err.requestOptions.extra['unique_key'] ?? '';
-      Map<String, dynamic> filteredHeaders =
-          Map.from(err.requestOptions.headers);
+      Map<String, dynamic> filteredHeaders = Map.from(err.requestOptions.headers);
       filteredHeaders.remove('Authorization'); // Ignore access tokens
       filteredHeaders.remove('User-Agent'); // Ignore user agents
       String cacheKey =
