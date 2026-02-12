@@ -86,7 +86,7 @@ class NetworkCacheInterceptor extends Interceptor {
         final specifiedCacheDate =
             options.extra['cache_updated_date'] != null ? DateTime.tryParse(options.extra['cache_updated_date']) : null;
 
-        if (specifiedCacheDate != null && cachedTimestamp.isBefore(specifiedCacheDate) ||
+        if ((specifiedCacheDate != null && cachedTimestamp.isBefore(specifiedCacheDate)) ||
             DateTime.now().difference(cachedTimestamp).inMinutes < cacheValidity) {
           handler.resolve(
             Response(
@@ -109,17 +109,24 @@ class NetworkCacheInterceptor extends Interceptor {
   /// Only `GET` responses with valid status codes are cached.
   @override
   Future<void> onResponse(Response response, ResponseInterceptorHandler handler) async {
-    if (response.statusCode != null &&
-        response.statusCode! >= 200 &&
-        response.statusCode! <= 300 &&
-        response.data != null &&
-        response.data['success'] == true &&
-        !_defaultNoCacheStatusCodes.contains(response.statusCode) &&
+    final data = response.data;
+
+    if (data is! Map<String, dynamic>) {
+      handler.next(response);
+      return;
+    }
+
+    if (data['success'] != true) {
+      handler.next(response);
+      return;
+    }
+
+    if (!_defaultNoCacheStatusCodes.contains(response.statusCode) &&
         !_defaultNoCacheHttpMethods.contains(response.requestOptions.method.toLowerCase())) {
       final String uniqueKey = response.requestOptions.extra['unique_key'] ?? '';
       Map<String, dynamic> filteredHeaders = Map.from(response.requestOptions.headers);
-      filteredHeaders.remove('Authorization'); // Ignore access tokens
-      filteredHeaders.remove('User-Agent'); // Ignore user agents
+      filteredHeaders.remove('Authorization');
+      filteredHeaders.remove('User-Agent');
       String cacheKey =
           '${response.requestOptions.baseUrl}${response.requestOptions.path}?${jsonEncode(response.requestOptions.queryParameters)}';
 
@@ -147,7 +154,6 @@ class NetworkCacheInterceptor extends Interceptor {
   /// Handles request errors and attempts to return cached data if enabled.
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) async {
-    log('Dio Error: ${err.message}');
     if (!_getCachedDataWhenError) {
       handler.next(err);
       return;
