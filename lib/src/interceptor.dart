@@ -112,7 +112,9 @@ class NetworkCacheInterceptor extends Interceptor {
   /// If caching is enabled and valid data exists, the cached response is returned.
   @override
   Future<void> onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
-    final bool isCache = options.extra['cache'] ?? false;
+    final dynamic cacheMode = options.extra['cache'] ?? false;
+    final bool isCache = cacheMode == true || cacheMode == 'only_cache';
+    final bool isOnlyCache = cacheMode == 'only_cache';
     final bool isIgnoredHttpMethod = _defaultNoCacheHttpMethods.contains(options.method.toLowerCase());
     final int cacheValidity = options.extra['validate_time'] ?? _defaultCacheValidity;
 
@@ -137,7 +139,7 @@ class NetworkCacheInterceptor extends Interceptor {
 
         final cachedTimestamp = DateTime.tryParse(cachedData['timestamp'] ?? '') ?? DateTime(1970);
         final specifiedCacheDate =
-        options.extra['cache_updated_date'] != null ? DateTime.tryParse(options.extra['cache_updated_date']) : null;
+            options.extra['cache_updated_date'] != null ? DateTime.tryParse(options.extra['cache_updated_date']) : null;
 
         if ((specifiedCacheDate != null && cachedTimestamp.isBefore(specifiedCacheDate)) ||
             DateTime.now().difference(cachedTimestamp).inMinutes < cacheValidity) {
@@ -151,8 +153,32 @@ class NetworkCacheInterceptor extends Interceptor {
           return;
         }
       }
+
+      // only_cache mode: no cached data found → reject without network request
+      if (isOnlyCache) {
+        handler.reject(
+          DioException(
+            requestOptions: options,
+            type: DioExceptionType.cancel,
+            message: 'no_cache_available',
+          ),
+        );
+        return;
+      }
     } catch (e, stackTrace) {
       log('Error fetching from cache: $e', stackTrace: stackTrace);
+
+      // only_cache mode: error during cache lookup → reject
+      if (isOnlyCache) {
+        handler.reject(
+          DioException(
+            requestOptions: options,
+            type: DioExceptionType.cancel,
+            message: 'no_cache_available',
+          ),
+        );
+        return;
+      }
     }
 
     handler.next(options);
