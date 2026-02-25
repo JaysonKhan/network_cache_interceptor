@@ -1,12 +1,20 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:encrypt/encrypt.dart';
 
 class AESHelper {
   final Key key;
 
-  AESHelper(String secretKey) : key = Key.fromUtf8(secretKey.padRight(32, '0'));
+  /// Fixed IV derived from the key — used only for deterministic encryption.
+  late final IV _fixedIv;
 
+  AESHelper(String secretKey) : key = Key.fromUtf8(secretKey.padRight(32, '0')) {
+    _fixedIv = IV(Uint8List.fromList(key.bytes.sublist(0, 16)));
+  }
+
+  /// Encrypts with a random IV (non-deterministic).
+  /// Suitable for response data where each encryption should be unique.
   String encrypt(String plainText) {
     final iv = IV.fromSecureRandom(16);
     final encrypter = Encrypter(AES(key, mode: AESMode.gcm));
@@ -16,6 +24,14 @@ class AESHelper {
     final combined = iv.bytes + encrypted.bytes;
 
     return base64Encode(combined);
+  }
+
+  /// Encrypts deterministically — same input always produces the same output.
+  /// Suitable for cache keys that need consistent DB lookup.
+  /// Uses AES-CBC with a fixed IV derived from the key.
+  String encryptDeterministic(String plainText) {
+    final encrypter = Encrypter(AES(key, mode: AESMode.cbc));
+    return encrypter.encrypt(plainText, iv: _fixedIv).base64;
   }
 
   String decrypt(String encryptedText) {

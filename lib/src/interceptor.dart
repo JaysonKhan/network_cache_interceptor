@@ -66,10 +66,11 @@ class NetworkCacheInterceptor extends Interceptor {
         _aesHelper = null;
 
   /// Encrypts the cache key if encryption is enabled.
-  /// Uses AES to produce a unique encrypted key for DB storage.
+  /// Uses deterministic AES encryption (fixed IV) so the same cache key
+  /// always produces the same encrypted output — required for DB lookups.
   String _encryptCacheKey(String cacheKey) {
     if (_aesHelper == null) return cacheKey;
-    return _aesHelper!.encrypt(cacheKey);
+    return _aesHelper!.encryptDeterministic(cacheKey);
   }
 
   /// Encrypts response data as JSON string if encryption is enabled.
@@ -93,6 +94,8 @@ class NetworkCacheInterceptor extends Interceptor {
     Map<String, dynamic> filteredHeaders = Map.from(options.headers);
     filteredHeaders.remove('Authorization');
     filteredHeaders.remove('User-Agent');
+    filteredHeaders.remove('content-length');
+    filteredHeaders.remove('X-SESSION-ID');
 
     String cacheKey = '${options.baseUrl}${options.path}?${jsonEncode(options.queryParameters)}';
 
