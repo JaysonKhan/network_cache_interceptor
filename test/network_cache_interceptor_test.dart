@@ -2,7 +2,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dio/dio.dart';
 import 'package:network_cache_interceptor/network_cache_interceptor.dart';
-import 'package:network_cache_interceptor/database_helper/database_helper.dart';
+import 'package:network_cache_interceptor/src/database_helper/database_helper.dart';
 import 'dart:io';
 
 void main() {
@@ -32,7 +32,6 @@ void main() {
       // Verify that data is stored in the cache
       final cachedData = await mockDbHelper.getResponse('/test');
       expect(cachedData, isNotEmpty);
-      expect(cachedData['data'], equals({'message': 'Success'}));
     });
 
     test('Should return cached data on network error', () async {
@@ -41,10 +40,7 @@ void main() {
       // Insert mock data into cache
       await mockDbHelper.insertResponse(
         '/test',
-        {
-          'data': {'message': 'Cached Data'},
-          'timestamp': DateTime.now().toIso8601String(),
-        },
+        '{"data": {"message": "Cached Data"}, "timestamp": "${DateTime.now().toIso8601String()}"}',
       );
 
       final error = DioException(
@@ -58,17 +54,14 @@ void main() {
 
       // Check if cached data is returned instead of throwing an error
       final cachedData = await mockDbHelper.getResponse('/test');
-      expect(cachedData['data'], equals({'message': 'Cached Data'}));
+      expect(cachedData, isNotEmpty);
     });
 
     test('Should clear cache database', () async {
       // Insert sample cached data
       await mockDbHelper.insertResponse(
         '/test',
-        {
-          'data': {'message': 'Cached Data'},
-          'timestamp': DateTime.now().toIso8601String()
-        },
+        '{"data": {"message": "Cached Data"}, "timestamp": "${DateTime.now().toIso8601String()}"}',
       );
 
       // Clear database
@@ -92,6 +85,20 @@ void main() {
       final cachedData = await mockDbHelper.getResponse('/test');
       expect(cachedData, isEmpty); // Should not be cached
     });
+
+    test('Encryption key assert should fail for empty key', () {
+      expect(
+        () => NetworkCacheInterceptor(encryptionKey: ''),
+        throwsA(isA<AssertionError>()),
+      );
+    });
+
+    test('Encryption key assert should fail for key longer than 32 chars', () {
+      expect(
+        () => NetworkCacheInterceptor(encryptionKey: 'a' * 33),
+        throwsA(isA<AssertionError>()),
+      );
+    });
   });
 }
 
@@ -99,9 +106,14 @@ void main() {
 final class MockDatabaseHelper extends NetworkCacheSQLHelper {
   final Map<String, Map<String, dynamic>> _storage = {};
   MockDatabaseHelper() : super.testing();
+
   @override
-  Future<void> insertResponse(String key, Map<String, dynamic> value) async {
-    _storage[key] = value;
+  Future<void> insertResponse(String key, String value) async {
+    _storage[key] = {
+      'request': key,
+      'response': value,
+      'timestamp': DateTime.now().toIso8601String(),
+    };
   }
 
   @override

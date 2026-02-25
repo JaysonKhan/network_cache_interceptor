@@ -1,6 +1,6 @@
 name: network_cache_interceptor
 description: "NetworkCacheInterceptor is a custom interceptor designed to optimize network requests by integrating caching functionality into your application using the Dio library."
-version: 2.3.5+1
+version: 2.3.5+2
 homepage: "https://github.com/JaysonKhan/network_cache_interceptor.git"
 repository: "https://github.com/JaysonKhan/network_cache_interceptor"
 license: 'MIT'
@@ -15,6 +15,7 @@ dependencies:
     sdk: flutter
   sqflite: ^2.4.1
   path: ^1.9.0 # Defined a stable version instead of `any`
+  encrypt: ^5.0.3
 
 dev_dependencies:
   flutter_test:

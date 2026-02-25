@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:developer';
 
 import 'package:flutter/cupertino.dart' show visibleForTesting;
@@ -46,25 +45,31 @@ class NetworkCacheSQLHelper {
     ''');
   }
 
-  Future<void> insertResponse(
-      String request, Map<String, dynamic> response) async {
+  /// Inserts a response into the cache database.
+  ///
+  /// [request] is the cache key (may be encrypted).
+  /// [response] is the response data as a string (may be encrypted).
+  Future<void> insertResponse(String request, String response) async {
     try {
       Database db = await database;
-      final responseString = jsonEncode(response);
       await db.insert(
         'responses',
         {
           'request': request,
-          'response': responseString,
+          'response': response,
           'timestamp': DateTime.now().toIso8601String(),
         },
-        conflictAlgorithm: ConflictAlgorithm.replace, // Replace on conflict
+        conflictAlgorithm: ConflictAlgorithm.replace,
       );
     } catch (e) {
       log('Error inserting response: $e');
     }
   }
 
+  /// Retrieves a cached response from the database.
+  ///
+  /// Returns a map with 'response' (raw string, may be encrypted) and 'timestamp',
+  /// or an empty map if not found.
   Future<Map<String, dynamic>> getResponse(String request) async {
     try {
       Database db = await database;
@@ -73,9 +78,7 @@ class NetworkCacheSQLHelper {
         where: 'request = ?',
         whereArgs: [request],
       );
-      return maps.isNotEmpty
-          ? jsonDecode(maps.first['response'] as String)
-          : {};
+      return maps.isNotEmpty ? maps.first : {};
     } catch (e) {
       log('Error fetching response: $e');
       return {};
