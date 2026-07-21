@@ -12,9 +12,14 @@ class MyApp extends StatelessWidget {
     ..interceptors.add(
       NetworkCacheInterceptor(
         noCacheStatusCodes: [401, 403, 304],
+        noCacheHttpMethods: ['POST', 'PUT'],
         cacheValidityMinutes: 30,
         getCachedDataWhenError: true,
         uniqueWithHeader: true,
+        // Optional: encrypt cached keys and data at rest (1-32 chars).
+        // encryptionKey: 'my_secret_key',
+        // Optional: only cache responses that match a custom rule.
+        // cacheWhen: (r) => r.data is Map && r.data['success'] == true,
       ),
     );
 
@@ -37,11 +42,11 @@ class MyApp extends StatelessWidget {
               }
               // Show an error message if fetching fails
               else if (snapshot.hasError) {
-                return const Text('Error: \${snapshot.error}');
+                return Text('Error: ${snapshot.error}');
               }
               // Display fetched data
               else {
-                return const Text('Data: \${snapshot.data}');
+                return Text('Data: ${snapshot.data}');
               }
             },
           ),

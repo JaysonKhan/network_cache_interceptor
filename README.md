@@ -11,7 +11,7 @@ Add the following to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  network_cache_interceptor: ^2.3.5
+  network_cache_interceptor: ^2.4.0
 ```
 
 Or install it via `flutter pub add`:
@@ -22,19 +22,20 @@ flutter pub add network_cache_interceptor
 
 ---
 
-## 🚀 What’s New in Version 2.3.5
+## 🚀 What’s New in Version 2.4.0
 
-Version **2.3.5** brings improved caching behavior and greater developer control:
+Version **2.4.0** adds encryption, offline-only reads, and finer caching control:
 
-✅ **New Features:**
-- **No-Cache HTTP Methods Option:**  
-  You can now specify which HTTP methods should **not** be cached (e.g., `POST`, `PUT`). This is similar to `noCacheStatusCodes` and gives developers finer control.
+✅ **Optional AES Encryption at Rest:**
+- Provide an `encryptionKey` (1-32 characters) to encrypt cached data (AES-GCM) and cache keys (deterministic AES-CBC) before they are stored in the local database.
 
-✅ **Enhanced Offline Mode:**
-- Now uses `DioExceptionType.connectionError` to better detect offline situations and return cached data when appropriate.
+✅ **`only_cache` Request Mode:**
+- Serve a valid cached response or fail fast without hitting the network — ideal for instant offline reads.
 
-✅ **Improved Robustness:**
-- Improved handling of `unique_key` and headers when generating cache keys.
+✅ **`cacheWhen` Predicate:**
+- Restrict which successful responses get cached with a simple callback (e.g. only cache bodies where `success == true`).
+
+> The public API and import path are unchanged — everything from earlier versions keeps working.
 
 ---
 
@@ -52,10 +53,13 @@ void main() {
   dio.interceptors.add(
     NetworkCacheInterceptor(
       noCacheStatusCodes: [401, 403, 304],
-      noCacheHttpMethods: ['POST', 'PUT'], // Specify which HTTP methods should NOT be cached
+      noCacheHttpMethods: ['POST', 'PUT'], // HTTP methods that should NOT be cached
       cacheValidityMinutes: 30,
       getCachedDataWhenError: true,
       uniqueWithHeader: true,
+      encryptionKey: 'my_secret_key', // Optional: encrypt cache at rest (1-32 chars)
+      cacheWhen: (response) =>          // Optional: only cache when this returns true
+          response.data is Map && response.data['success'] == true,
     ),
   );
 }
@@ -110,7 +114,41 @@ final response = await dio.get(
 
 ---
 
-### 4. Clear All Cached Data
+### 4. Offline-Only Reads with `only_cache`
+
+Use `'only_cache'` to return cached data instantly and **skip the network entirely**. If no valid cache exists, the request fails fast with a `DioException` (`type: cancel`, `message: 'no_cache_available'`):
+
+```dart
+try {
+  final response = await dio.get(
+    'https://jsonplaceholder.typicode.com/posts',
+    options: Options(extra: {'cache': 'only_cache'}),
+  );
+  print(response.data); // Served from cache, no network call
+} on DioException catch (e) {
+  if (e.message == 'no_cache_available') {
+    print('No cached data available');
+  }
+}
+```
+
+---
+
+### 5. Encrypt the Cache at Rest
+
+Pass an `encryptionKey` (1-32 characters) to encrypt cached data and cache keys before they are written to the local database:
+
+```dart
+dio.interceptors.add(
+  NetworkCacheInterceptor(encryptionKey: 'my_secret_key'),
+);
+```
+
+Response bodies are encrypted with AES-GCM (random IV per entry) and cache keys with deterministic AES-CBC, so lookups stay consistent while data stays unreadable on disk.
+
+---
+
+### 6. Clear All Cached Data
 
 To remove all cached data:
 
@@ -130,6 +168,8 @@ await cacheInterceptor.clearDatabase();
 | `cacheValidityMinutes`   | Cache validity duration (in minutes)                       | `30`                   |
 | `getCachedDataWhenError` | Return cached data on network errors                       | `true`                 |
 | `uniqueWithHeader`       | Use request headers for unique cache keys                  | `false`                |
+| `cacheWhen`              | Predicate to restrict which responses get cached           | `null` (cache all)     |
+| `encryptionKey`          | AES key (1-32 chars) to encrypt the cache at rest          | `null` (no encryption) |
 | `unique_key`             | Custom key for precise cache separation                    | `''` (optional)        |
 
 ---
@@ -137,8 +177,11 @@ await cacheInterceptor.clearDatabase();
 ## 🔧 Technical Details
 
 - **Offline Mode:** Cached responses are returned on timeouts, no connection, or socket errors.
+- **Offline-Only Reads:** `only_cache` mode serves the cache and skips the network entirely.
+- **Encryption at Rest:** Optional AES encryption for cached data (AES-GCM) and cache keys (AES-CBC).
 - **Custom No-Cache HTTP Methods:** Control which request methods should bypass caching.
-- **Header Filtering:** Ignores `Authorization` and `User-Agent` headers in cache keys for consistency.
+- **Custom Cache Filter:** Use `cacheWhen` to decide per response whether to cache it.
+- **Header Filtering:** Ignores `Authorization`, `User-Agent`, and `content-length` headers in cache keys for consistency.
 - **Granular Caching:** Supports `unique_key` and optional header-based differentiation.
 - **Robust Database Handling:** Uses a local SQL database for efficient storage.
 

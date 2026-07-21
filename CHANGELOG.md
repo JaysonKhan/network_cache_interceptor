@@ -1,6 +1,25 @@
 
 # Changelog
 
+## [2.4.0] - 2026-07-21
+
+### Added
+- **Optional AES encryption at rest:**
+  - Pass an `encryptionKey` (1-32 characters) to encrypt cached data and cache keys before they are written to the local database. Response bodies use AES-GCM (random IV per entry); cache keys use deterministic AES-CBC so lookups stay consistent.
+- **`only_cache` request mode:**
+  - Set `extra: {'cache': 'only_cache'}` to serve a valid cached response or fail fast — without a network call — with a `DioException` (`type: cancel`, `message: 'no_cache_available'`).
+- **`cacheWhen` predicate:**
+  - An optional `bool Function(Response)` to further restrict which successful responses are cached (e.g. only cache bodies where `success == true`).
+
+### Changed
+- **Restructured into `lib/src/`:** the public API is exported from a single barrel file; internal helpers now live under `src/`. The public import path and API are unchanged.
+- Cache keys now also ignore the `content-length` header for more consistent keys.
+
+### Fixed
+- Rewrote the test suite to run end-to-end against an in-memory SQLite database; all tests pass.
+
+---
+
 ## [2.3.5] - Updated
 
 ### Added

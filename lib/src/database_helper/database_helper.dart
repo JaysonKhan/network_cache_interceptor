@@ -7,7 +7,8 @@ import 'package:sqflite/sqflite.dart';
 
 /// Database helper class to handle caching
 class NetworkCacheSQLHelper {
-  static final NetworkCacheSQLHelper _instance = NetworkCacheSQLHelper._internal();
+  static final NetworkCacheSQLHelper _instance =
+      NetworkCacheSQLHelper._internal();
   static Database? _database;
 
   factory NetworkCacheSQLHelper() {
