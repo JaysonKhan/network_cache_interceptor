@@ -1,6 +1,52 @@
 
 # Changelog
 
+## [3.0.0] - 2026-07-21
+
+A major release focused on privacy-by-default, cache lifecycle control, and
+observability.
+
+### ⚠️ Breaking Changes
+- **Opt-in storage by default (`storeOnlyOptIn: true`):** responses are now cached
+  only when their request opts in (`extra['cache']` is set). Previously every
+  eligible `GET` was written to disk. Set `storeOnlyOptIn: false` to restore the
+  old behavior.
+- **Opt-in offline fallback (`offlineFallbackOnlyOptIn: true`):** on connectivity
+  errors, the cache is consulted only for opt-in requests. Set to `false` for the
+  previous always-check behavior.
+- **Configuration is applied once:** the first `NetworkCacheInterceptor(...)` call
+  configures the singleton; later calls return the same instance and ignore their
+  arguments (so `NetworkCacheInterceptor().clearDatabase()` no longer resets your
+  options). Use `NetworkCacheInterceptor.instance` to access it.
+- **Cache schema bumped to v3:** existing cached data is dropped on upgrade
+  (the cache is disposable).
+
+### Added
+- **`'refresh'` request mode:** `extra: {'cache': 'refresh'}` always hits the
+  network and stores the result without serving from cache — the revalidate leg
+  of stale-while-revalidate.
+- **`cachedThenFresh(dio, path)`:** a `Stream<Response>` that emits the cached
+  response first (if any) and then the fresh network response.
+- **Cache-hit markers:** served responses now carry `response.extra['from_cache']`
+  (`true`) and `response.extra['cached_at']` (timestamp).
+- **Original status code & headers preserved:** cache hits restore the stored
+  status code and headers instead of a hardcoded `200`.
+- **`CacheMissException`:** `only_cache` misses now reject with a `DioException`
+  whose `error` is a `CacheMissException`, distinguishable from real errors.
+- **Cache lifecycle API:** `invalidate(baseUrlWithPath)` clears all variants of an
+  endpoint, `deleteExpired(maxAge)` prunes old entries, and `maxEntries` evicts the
+  oldest entries once the cap is exceeded.
+- **Encryption key rotation:** entries written under a previous key are detected
+  and purged automatically instead of failing to decrypt.
+- **`Duration` support:** `cacheValidity` (constructor) and `extra['validate_time']`
+  now accept a `Duration` in addition to integer minutes.
+
+### Notes
+- Encrypting/decrypting very large payloads still runs on the main isolate;
+  off-main-thread encryption is planned for a future release.
+
+---
+
 ## [2.4.0] - 2026-07-21
 
 ### Added

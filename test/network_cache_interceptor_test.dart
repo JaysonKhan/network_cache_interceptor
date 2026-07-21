@@ -12,22 +12,27 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 /// A fake [HttpClientAdapter] that returns canned responses or throws, so the
 /// full interceptor chain can be exercised without real network access.
 class _FakeAdapter implements HttpClientAdapter {
-  ResponseBody Function(RequestOptions options)? onFetch;
-  Object? error;
+  ResponseBody Function(RequestOptions options)? _onFetch;
+  Object? _error;
   int callCount = 0;
 
-  void returnJson(Object? data, {int status = 200}) {
-    error = null;
-    onFetch = (_) => ResponseBody.fromString(
+  void returnJson(
+    Object? data, {
+    int status = 200,
+    Map<String, List<String>> headers = const {},
+  }) {
+    _error = null;
+    _onFetch = (_) => ResponseBody.fromString(
           jsonEncode(data),
           status,
           headers: {
             Headers.contentTypeHeader: [Headers.jsonContentType],
+            ...headers,
           },
         );
   }
 
-  void throwOffline() => error = const SocketException('offline');
+  void throwOffline() => _error = const SocketException('offline');
 
   @override
   Future<ResponseBody> fetch(
@@ -36,8 +41,8 @@ class _FakeAdapter implements HttpClientAdapter {
     Future<void>? cancelFuture,
   ) async {
     callCount++;
-    if (error != null) throw error!;
-    return onFetch!(options);
+    if (_error != null) throw _error!;
+    return _onFetch!(options);
   }
 
   @override
@@ -55,31 +60,32 @@ void main() {
   late _FakeAdapter adapter;
 
   Dio buildDio(NetworkCacheInterceptor interceptor) {
-    final dio = Dio(BaseOptions(baseUrl: 'https://example.com'))
+    return Dio(BaseOptions(baseUrl: 'https://example.com'))
       ..interceptors.add(interceptor)
       ..httpClientAdapter = adapter;
-    return dio;
   }
 
   setUp(() async {
     adapter = _FakeAdapter();
-    // Reset shared cache state before each test.
-    await NetworkCacheInterceptor().clearDatabase();
+    NetworkCacheInterceptor.debugResetConfig();
+    await NetworkCacheSQLHelper().clearDatabase();
   });
 
   group('Generic caching', () {
     test('caches a Map response and serves it from cache while valid',
         () async {
-      final dio = buildDio(NetworkCacheInterceptor(cacheValidityMinutes: 30));
+      final dio = buildDio(NetworkCacheInterceptor());
 
       adapter.returnJson({'message': 'v1'});
       final first = await dio.get('/posts', options: _cache());
       expect(first.data['message'], 'v1');
+      expect(first.extra['from_cache'], isNull);
 
-      // The network now returns something different; a cached hit must win.
       adapter.returnJson({'message': 'v2'});
       final second = await dio.get('/posts', options: _cache());
       expect(second.data['message'], 'v1');
+      expect(second.extra['from_cache'], true);
+      expect(second.extra['cached_at'], isNotNull);
     });
 
     test('caches List responses and serves them when offline', () async {
@@ -92,21 +98,97 @@ void main() {
       adapter.throwOffline();
       final offline = await dio.get('/list', options: _cache());
       expect(offline.data, [1, 2, 3]);
+      expect(offline.extra['from_cache'], true);
     });
 
     test('does not serve expired cache', () async {
-      final dio = buildDio(NetworkCacheInterceptor(cacheValidityMinutes: 30));
+      final dio = buildDio(NetworkCacheInterceptor());
 
       adapter.returnJson({'message': 'old'});
       await dio.get('/expiring', options: _cache());
 
-      // validate_time: 0 makes any existing entry immediately stale.
       adapter.returnJson({'message': 'fresh'});
       final result = await dio.get(
         '/expiring',
         options: Options(extra: {'cache': true, 'validate_time': 0}),
       );
       expect(result.data['message'], 'fresh');
+    });
+
+    test('preserves original status code and headers on cache hit', () async {
+      final dio = buildDio(NetworkCacheInterceptor());
+
+      adapter.returnJson(
+        {'ok': true},
+        status: 201,
+        headers: {
+          'x-custom': ['header-value'],
+        },
+      );
+      await dio.get('/headers', options: _cache());
+
+      adapter.throwOffline();
+      final offline = await dio.get('/headers', options: _cache());
+      expect(offline.statusCode, 201);
+      expect(offline.headers.value('x-custom'), 'header-value');
+    });
+  });
+
+  group('storeOnlyOptIn (NCI-1)', () {
+    test('does not store responses that did not opt in (default)', () async {
+      final dio = buildDio(NetworkCacheInterceptor());
+
+      adapter.returnJson({'message': 'private'});
+      await dio.get('/private'); // no cache flag
+
+      expect(await NetworkCacheSQLHelper().count(), 0);
+    });
+
+    test('stores all responses when storeOnlyOptIn is false', () async {
+      final dio = buildDio(NetworkCacheInterceptor(storeOnlyOptIn: false));
+
+      adapter.returnJson({'message': 'anything'});
+      await dio.get('/anything'); // no cache flag
+
+      expect(await NetworkCacheSQLHelper().count(), 1);
+    });
+  });
+
+  group('refresh mode (NCI-2)', () {
+    test('always hits the network, stores, and never serves from cache',
+        () async {
+      final dio = buildDio(NetworkCacheInterceptor());
+
+      adapter.returnJson({'v': 1});
+      await dio.get('/swr', options: _cache());
+
+      adapter.returnJson({'v': 2});
+      final refreshed = await dio.get('/swr', options: _refresh());
+      expect(refreshed.data['v'], 2);
+      expect(refreshed.extra['from_cache'], isNull);
+
+      // The refreshed value must have replaced the cache.
+      final cached = await dio.get('/swr', options: _onlyCache());
+      expect(cached.data['v'], 2);
+    });
+  });
+
+  group('config is applied once (NCI-3)', () {
+    test('a later bare constructor does not wipe the configuration', () async {
+      final dio = buildDio(NetworkCacheInterceptor(encryptionKey: 'my_key'));
+
+      // A bare call must return the same, still-encrypted instance.
+      final bare = NetworkCacheInterceptor();
+      expect(identical(bare, NetworkCacheInterceptor.instance), isTrue);
+
+      adapter.returnJson({'secret': 'ENC_MARKER'});
+      await dio.get('/enc', options: _cache());
+
+      final rows =
+          await (await NetworkCacheSQLHelper().database).query('responses');
+      for (final row in rows) {
+        expect(row['response'].toString().contains('ENC_MARKER'), isFalse);
+      }
     });
   });
 
@@ -118,10 +200,9 @@ void main() {
         ),
       );
 
-      adapter.returnJson({'success': false, 'data': 'nope'});
+      adapter.returnJson({'success': false});
       await dio.get('/guarded', options: _cache());
 
-      // Nothing was cached, so an offline retry must fail.
       adapter.throwOffline();
       await expectLater(
         dio.get('/guarded', options: _cache()),
@@ -136,7 +217,7 @@ void main() {
         ),
       );
 
-      adapter.returnJson({'success': true, 'data': 'ok'});
+      adapter.returnJson({'success': true});
       await dio.get('/guarded', options: _cache());
 
       adapter.throwOffline();
@@ -146,7 +227,7 @@ void main() {
   });
 
   group('only_cache mode', () {
-    test('rejects without hitting the network when cache is empty', () async {
+    test('rejects with a CacheMissException when cache is empty', () async {
       final dio = buildDio(NetworkCacheInterceptor());
 
       await expectLater(
@@ -154,7 +235,7 @@ void main() {
         throwsA(
           isA<DioException>()
               .having((e) => e.type, 'type', DioExceptionType.cancel)
-              .having((e) => e.message, 'message', 'no_cache_available'),
+              .having((e) => e.error, 'error', isA<CacheMissException>()),
         ),
       );
       expect(adapter.callCount, 0, reason: 'network must not be called');
@@ -169,7 +250,36 @@ void main() {
       final callsBefore = adapter.callCount;
       final result = await dio.get('/only', options: _onlyCache());
       expect(result.data['message'], 'stored');
-      expect(adapter.callCount, callsBefore, reason: 'served from cache');
+      expect(result.extra['from_cache'], true);
+      expect(adapter.callCount, callsBefore);
+    });
+  });
+
+  group('offlineFallbackOnlyOptIn (NCI-7)', () {
+    test('does not serve cache offline for non-opt-in requests (default)',
+        () async {
+      final dio = buildDio(NetworkCacheInterceptor());
+
+      adapter.returnJson({'message': 'cached'});
+      await dio.get('/fb', options: _cache()); // populate cache
+
+      adapter.throwOffline();
+      await expectLater(
+        dio.get('/fb'), // no opt-in
+        throwsA(isA<DioException>()),
+      );
+    });
+
+    test('serves cache offline for any request when flag is false', () async {
+      final dio =
+          buildDio(NetworkCacheInterceptor(offlineFallbackOnlyOptIn: false));
+
+      adapter.returnJson({'message': 'cached'});
+      await dio.get('/fb', options: _cache());
+
+      adapter.throwOffline();
+      final offline = await dio.get('/fb'); // no opt-in, still served
+      expect(offline.data['message'], 'cached');
     });
   });
 
@@ -181,11 +291,146 @@ void main() {
       adapter.returnJson({'message': 'unauthorized'}, status: 401);
       await dio.get('/secure', options: _cache());
 
-      adapter.throwOffline();
+      expect(await NetworkCacheSQLHelper().count(), 0);
+    });
+  });
+
+  group('Eviction & expiry (NCI-8)', () {
+    test('maxEntries evicts the oldest entries', () async {
+      final dio = buildDio(NetworkCacheInterceptor(maxEntries: 2));
+
+      for (final path in ['/a', '/b', '/c']) {
+        adapter.returnJson({'p': path});
+        await dio.get(path, options: _cache());
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+      }
+
+      expect(await NetworkCacheSQLHelper().count(), 2);
       await expectLater(
-        dio.get('/secure', options: _cache()),
+        dio.get('/a', options: _onlyCache()),
         throwsA(isA<DioException>()),
       );
+    });
+
+    test('deleteExpired removes entries older than maxAge', () async {
+      final interceptor = NetworkCacheInterceptor();
+      final dio = buildDio(interceptor);
+
+      adapter.returnJson({'x': 1});
+      await dio.get('/exp', options: _cache());
+
+      expect(await interceptor.deleteExpired(const Duration(minutes: 1)), 0);
+      expect(await interceptor.deleteExpired(Duration.zero), 1);
+      expect(await NetworkCacheSQLHelper().count(), 0);
+    });
+  });
+
+  group('invalidate (NCI-9)', () {
+    test('removes all query variants of an endpoint', () async {
+      final interceptor = NetworkCacheInterceptor();
+      final dio = buildDio(interceptor);
+
+      adapter.returnJson({'page': 1});
+      await dio.get('/orders', queryParameters: {'page': 1}, options: _cache());
+      adapter.returnJson({'page': 2});
+      await dio.get('/orders', queryParameters: {'page': 2}, options: _cache());
+
+      final removed =
+          await interceptor.invalidate('https://example.com/orders');
+      expect(removed, 2);
+      expect(await NetworkCacheSQLHelper().count(), 0);
+    });
+
+    test('works with encryption enabled', () async {
+      final interceptor = NetworkCacheInterceptor(encryptionKey: 'k');
+      final dio = buildDio(interceptor);
+
+      adapter.returnJson({'ok': true});
+      await dio.get('/orders', options: _cache());
+
+      final removed =
+          await interceptor.invalidate('https://example.com/orders');
+      expect(removed, 1);
+    });
+  });
+
+  group('key rotation (NCI-12)', () {
+    test('entries written with an old key are dropped after rotation',
+        () async {
+      var dio = buildDio(NetworkCacheInterceptor(encryptionKey: 'key_aaa'));
+      adapter.returnJson({'v': 'secret'});
+      await dio.get('/rot', options: _cache());
+      expect(await NetworkCacheSQLHelper().count(), 1);
+
+      // Rotate the key.
+      NetworkCacheInterceptor.debugResetConfig();
+      dio = buildDio(NetworkCacheInterceptor(encryptionKey: 'key_bbb'));
+
+      await expectLater(
+        dio.get('/rot', options: _onlyCache()),
+        throwsA(isA<DioException>()),
+      );
+      // The unreadable entry was pruned.
+      expect(await NetworkCacheSQLHelper().count(), 0);
+    });
+  });
+
+  group('Duration validity (NCI-11)', () {
+    test('cacheValidity as Duration keeps entries fresh', () async {
+      final dio = buildDio(
+          NetworkCacheInterceptor(cacheValidity: const Duration(hours: 1)));
+
+      adapter.returnJson({'v': 1});
+      await dio.get('/dur', options: _cache());
+
+      adapter.returnJson({'v': 2});
+      final served = await dio.get('/dur', options: _cache());
+      expect(served.data['v'], 1);
+    });
+
+    test('per-request validate_time accepts a Duration', () async {
+      final dio = buildDio(NetworkCacheInterceptor());
+
+      adapter.returnJson({'v': 1});
+      await dio.get('/dur', options: _cache());
+
+      adapter.returnJson({'v': 2});
+      final refetched = await dio.get(
+        '/dur',
+        options:
+            Options(extra: {'cache': true, 'validate_time': Duration.zero}),
+      );
+      expect(refetched.data['v'], 2);
+    });
+  });
+
+  group('cachedThenFresh (NCI-10)', () {
+    test('emits cached then fresh', () async {
+      final interceptor = NetworkCacheInterceptor();
+      final dio = buildDio(interceptor);
+
+      adapter.returnJson({'v': 1});
+      await dio.get('/swr', options: _cache());
+
+      adapter.returnJson({'v': 2});
+      final emitted = await interceptor.cachedThenFresh(dio, '/swr').toList();
+
+      expect(emitted.length, 2);
+      expect(emitted[0].data['v'], 1);
+      expect(emitted[0].extra['from_cache'], true);
+      expect(emitted[1].data['v'], 2);
+      expect(emitted[1].extra['from_cache'], isNull);
+    });
+
+    test('emits only fresh when nothing is cached', () async {
+      final interceptor = NetworkCacheInterceptor();
+      final dio = buildDio(interceptor);
+
+      adapter.returnJson({'v': 3});
+      final emitted = await interceptor.cachedThenFresh(dio, '/swr').toList();
+
+      expect(emitted.length, 1);
+      expect(emitted[0].data['v'], 3);
     });
   });
 
@@ -197,16 +442,14 @@ void main() {
       adapter.returnJson({'secret': marker});
       await dio.get('/enc', options: _cache());
 
-      // Raw rows must not contain the plaintext marker.
-      final db = await NetworkCacheSQLHelper().database;
-      final rows = await db.query('responses');
+      final rows =
+          await (await NetworkCacheSQLHelper().database).query('responses');
       expect(rows, isNotEmpty);
       for (final row in rows) {
         expect(row['request'].toString().contains('/enc'), isFalse);
         expect(row['response'].toString().contains(marker), isFalse);
       }
 
-      // Decryption on read still returns the original data.
       adapter.throwOffline();
       final offline = await dio.get('/enc', options: _cache());
       expect(offline.data['secret'], marker);
@@ -251,3 +494,5 @@ void main() {
 Options _cache() => Options(extra: {'cache': true});
 
 Options _onlyCache() => Options(extra: {'cache': 'only_cache'});
+
+Options _refresh() => Options(extra: {'cache': 'refresh'});

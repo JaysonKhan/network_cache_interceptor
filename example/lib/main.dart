@@ -13,9 +13,11 @@ class MyApp extends StatelessWidget {
       NetworkCacheInterceptor(
         noCacheStatusCodes: [401, 403, 304],
         noCacheHttpMethods: ['POST', 'PUT'],
-        cacheValidityMinutes: 30,
+        cacheValidity: const Duration(minutes: 30),
         getCachedDataWhenError: true,
-        uniqueWithHeader: true,
+        // storeOnlyOptIn defaults to true: only requests that opt into caching
+        // (extra['cache'] set) are written to disk.
+        maxEntries: 200, // Optional: cap the number of stored entries.
         // Optional: encrypt cached keys and data at rest (1-32 chars).
         // encryptionKey: 'my_secret_key',
         // Optional: only cache responses that match a custom rule.
